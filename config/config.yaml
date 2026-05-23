@@ -1,0 +1,64 @@
+# ── ETL Pipeline Configuration ────────────────────────────────────────────────
+pipeline:
+  name: "world-bank-au-employment-etl"
+  version: "1.0.0"
+  log_level: "INFO"
+
+extract:
+  base_url: "https://api.worldbank.org/v2"
+  country: "AU"
+  indicators:
+    - id: "SL.UEM.TOTL.ZS"
+      name: "unemployment_rate_pct"
+      description: "Unemployment, total (% of total labour force)"
+    - id: "SL.EMP.TOTL.SP.ZS"
+      name: "employment_to_population_pct"
+      description: "Employment to population ratio, 15+, total (%)"
+    - id: "SL.TLF.CACT.ZS"
+      name: "labour_force_participation_pct"
+      description: "Labour force participation rate, total (% of total population ages 15+)"
+    - id: "NY.GDP.MKTP.CD"
+      name: "gdp_current_usd"
+      description: "GDP (current US$)"
+    - id: "NY.GDP.PCAP.CD"
+      name: "gdp_per_capita_usd"
+      description: "GDP per capita (current US$)"
+    - id: "FP.CPI.TOTL.ZG"
+      name: "inflation_cpi_pct"
+      description: "Inflation, consumer prices (annual %)"
+  date_range:
+    start_year: 1990
+    end_year: 2024
+  per_page: 100
+  timeout_seconds: 30
+  retry_attempts: 3
+  retry_backoff_seconds: 2
+
+transform:
+  drop_null_value_rows: true
+  rename_columns:
+    countryiso3code: "iso3_code"
+    country.value: "country_name"
+    indicator.id: "indicator_id"
+    indicator.value: "indicator_description"
+    date: "year"
+    value: "metric_value"
+    decimal: "decimal_places"
+  expected_year_range: [1990, 2024]
+  numeric_columns: ["year", "metric_value"]
+
+load:
+  db_path: "data/processed/au_employment.db"
+  raw_path: "data/raw"
+  table_name: "economic_indicators"
+  upsert_key: ["indicator_id", "year"]
+  batch_size: 500
+
+quality:
+  max_null_pct: 5.0          # fail if >5% of metric_value is null
+  min_year_coverage: 25      # each indicator must have ≥25 years of data
+  value_bounds:
+    unemployment_rate_pct:       [0, 40]
+    employment_to_population_pct:[0, 100]
+    labour_force_participation_pct:[0, 100]
+    inflation_cpi_pct:           [-20, 100]
